@@ -1,0 +1,9 @@
+builds:
+  - binary: ezcert
+    main: ./cmd/ezcert.go
+    goos:
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64

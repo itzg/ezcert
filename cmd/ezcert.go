@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-var Version string = "DEV"
+var version string = "DEV"
 
 var (
 	subject = ezcert.DN(kingpin.Flag("subject", "A distinguished name (DN) of the certificate's subject, "+
@@ -56,7 +56,7 @@ var (
 )
 
 func main() {
-	kingpin.Version(Version)
+	kingpin.Version(version)
 
 	switch kingpin.Parse() {
 	case createCa.FullCommand():
