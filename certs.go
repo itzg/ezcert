@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Rackspace
+// Copyright 2018 Geoff Bourne
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"time"
 	"encoding/asn1"
 	"math/big"
+	"crypto/sha1"
+	"crypto"
 )
 
 const (
@@ -56,10 +58,16 @@ func CreateCaCertAndKey(out string, subject pkix.Name, expires int, keyBits int)
 		return errors.Wrap(err, "Failed to generate RSA private key")
 	}
 
+	subjectKeyId, err := generateSubjectKeyId(privateKey.Public())
+	if err != nil {
+		return errors.Wrap(err, "Unable to generate subject key identifier")
+	}
+
 	var templateCert x509.Certificate
 	templateCert.Subject = subject
 	templateCert.SerialNumber = big.NewInt(1)
 	templateCert.IsCA = true
+	templateCert.SubjectKeyId = subjectKeyId
 	templateCert.BasicConstraintsValid = true
 	templateCert.NotBefore = time.Now()
 	templateCert.NotAfter = time.Now().AddDate(0, 0, expires)
@@ -114,25 +122,25 @@ func WriteCertKeyFiles(out string, prefix string, keyAlgorithm string, certDer [
 
 	// PEM encode and write to those files
 
-	err = encodePem(certFile, PemBlockTypeCertificate, certDer)
+	err = EncodePem(certFile, PemBlockTypeCertificate, certDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write certificate file")
 	}
-	err = encodePem(bundleFile, PemBlockTypeCertificate, certDer)
+	err = EncodePem(bundleFile, PemBlockTypeCertificate, certDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write bundle file")
 	}
 
-	err = encodePem(rsaKeyFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
+	err = EncodePem(rsaKeyFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write private RSA key file")
 	}
-	err = encodePem(bundleFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
+	err = EncodePem(bundleFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write bundle file")
 	}
 
-	err = encodePem(pkcs8KeyFile, PemBlockTypePkcs8PrivateKey, privateKeyPkcs8Der)
+	err = EncodePem(pkcs8KeyFile, PemBlockTypePkcs8PrivateKey, privateKeyPkcs8Der)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write private PKCS8/RSA key file")
 	}
@@ -140,7 +148,7 @@ func WriteCertKeyFiles(out string, prefix string, keyAlgorithm string, certDer [
 	return nil
 }
 
-func encodePem(writer io.Writer, blockType string, der []byte) error {
+func EncodePem(writer io.Writer, blockType string, der []byte) error {
 	certPemBlock := pem.Block{
 		Type:  blockType,
 		Bytes: der,
@@ -168,4 +176,16 @@ func MarshalPKCS8PrivateKey(privateKey *rsa.PrivateKey) ([]byte, error) {
 	pkcsKey.PrivateKeyAlgorithm[0] = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 1}
 
 	return asn1.Marshal(pkcsKey)
+}
+
+func generateSubjectKeyId(publicKey crypto.PublicKey) ([]byte, error) {
+	bytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	keySha := sha1.New().Sum(bytes)
+	// The leading and the trailing bytes of the SHA1 of the public key didn't seem to vary
+	// so taking a slice from an inner part resulted in a derived but variable identifier
+	return keySha[34:54], nil
 }

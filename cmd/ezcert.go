@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Rackspace
+// Copyright 2018 Geoff Bourne
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ var Version string = "DEV"
 var (
 	createCa        = kingpin.Command("ca", "Create a CA certificate")
 	createCaSubject = ezcert.DN(createCa.Flag("subject", "A distinguished name (DN) of the CA, " +
-		"such as CN=widgets.com,C=US,L=Dallas,ST=Texas,O=Internet Widgets,OU=WWW").
+		"such as CN=widgets.com;C=US;L=Dallas;ST=Texas;O=Internet Widgets;OU=WWW").
 		Required())
 	createCaExpires = createCa.Flag("expires", "Specifies the number of days to make a certificate valid for").
 		Default("30").Int()

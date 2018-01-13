@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Rackspace
+// Copyright 2018 Geoff Bourne
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 type DNValue pkix.Name
 
 func (n *DNValue) Set(value string) error {
-	parts := strings.Split(value, ",")
+	parts := strings.Split(value, ";")
 	for _, part := range parts {
 		keyVal := strings.SplitN(part, "=", 2)
 		if len(keyVal) != 2 {
