@@ -115,6 +115,67 @@ func CreateCaCertAndKey(out string, subject pkix.Name, expires int, keyBits int)
 	return WriteCertKeyFiles(out, "ca", "RSA", certDer, privateKey)
 }
 
+func CreateClientCertAndKey(out string, subject pkix.Name, expires int, keyBits int, caCertPath string, userPrefix string) error {
+
+	signerCert, err := readCertFromPemFile(caCertPath)
+	if err != nil {
+		return err
+	}
+
+	privateKey, templateCert, err := newKeyAndTemplate(subject, expires, keyBits)
+	if err != nil {
+		return err
+	}
+
+	templateCert.IsCA = false
+	templateCert.BasicConstraintsValid = true
+	templateCert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+
+	certDer, err := x509.CreateCertificate(rand.Reader, templateCert, signerCert, privateKey.Public(), privateKey)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create and sign client certificate")
+	}
+
+	var fullPrefix string
+	if userPrefix != "" {
+		fullPrefix = userPrefix + "-client"
+	} else {
+		fullPrefix = "client"
+	}
+	return WriteCertKeyFiles(out, fullPrefix, "RSA", certDer, privateKey)
+}
+
+func CreateServerCertAndKey(out string, subject pkix.Name, expires int, keyBits int, caCertPath string, userPrefix string, dnsNames []string) error {
+
+	signerCert, err := readCertFromPemFile(caCertPath)
+	if err != nil {
+		return err
+	}
+
+	privateKey, templateCert, err := newKeyAndTemplate(subject, expires, keyBits)
+	if err != nil {
+		return err
+	}
+
+	templateCert.IsCA = false
+	templateCert.BasicConstraintsValid = true
+	templateCert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+	templateCert.DNSNames = dnsNames
+
+	certDer, err := x509.CreateCertificate(rand.Reader, templateCert, signerCert, privateKey.Public(), privateKey)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create and sign server certificate")
+	}
+
+	var fullPrefix string
+	if userPrefix != "" {
+		fullPrefix = userPrefix + "-server"
+	} else {
+		fullPrefix = "server"
+	}
+	return WriteCertKeyFiles(out, fullPrefix, "RSA", certDer, privateKey)
+}
+
 func newKeyAndTemplate(subject pkix.Name, expires int, keyBits int) (*rsa.PrivateKey, *x509.Certificate, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, keyBits)
 	if err != nil {
@@ -138,36 +199,6 @@ func newKeyAndTemplate(subject pkix.Name, expires int, keyBits int) (*rsa.Privat
 	templateCert.NotAfter = time.Now().AddDate(0, 0, expires)
 
 	return privateKey, &templateCert, nil
-}
-
-func CreateClientCertAndKey(out string, subject pkix.Name, expires int, keyBits int, caCertPath string, userPrefix string) error {
-
-	signerCert, err := readCertFromPemFile(caCertPath)
-	if err != nil {
-		return err
-	}
-
-	privateKey, templateCert, err := newKeyAndTemplate(subject, expires, keyBits)
-	if err != nil {
-		return err
-	}
-
-	templateCert.IsCA = false
-	templateCert.BasicConstraintsValid = true
-	templateCert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
-
-	certDer, err := x509.CreateCertificate(rand.Reader, templateCert, signerCert, privateKey.Public(), privateKey)
-	if err != nil {
-		return errors.Wrap(err, "Failed to create self-signed CA certificate")
-	}
-
-	var fullPrefix string
-	if userPrefix != "" {
-		fullPrefix = userPrefix + "-client"
-	} else {
-		fullPrefix = "client"
-	}
-	return WriteCertKeyFiles(out, fullPrefix, "RSA", certDer, privateKey)
 }
 
 func readCertFromPemFile(certPath string) (*x509.Certificate, error) {

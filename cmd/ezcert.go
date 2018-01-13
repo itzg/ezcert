@@ -47,6 +47,12 @@ var (
 	createClientCaCert = createClient.Flag("ca-cert", "An existing CA certificate").
 				Required().ExistingFile()
 	createClientUserPrefix = createClient.Flag("prefix", "A prefix to use for the generated files").String()
+
+	createServer       = kingpin.Command("server", "Create a server certificate from a CA certificate")
+	createServerCaCert = createServer.Flag("ca-cert", "An existing CA certificate").
+				Required().ExistingFile()
+	createServerUserPrefix = createServer.Flag("prefix", "A prefix to use for the generated files").String()
+	createServerDnsNames   = createServer.Flag("dns", "A DNS based SAN for this server. Can be repeated.").Strings()
 )
 
 func main() {
@@ -66,6 +72,17 @@ func main() {
 		err := ezcert.CreateClientCertAndKey(*out, *subject, *expires, *keyBits, *createClientCaCert, *createClientUserPrefix)
 		if err != nil {
 			log.WithError(err).Error("Failed to generate client certificate")
+			os.Exit(1)
+		}
+
+	case createServer.FullCommand():
+		log.
+			WithField("subject", *subject).
+			WithField("SANs", *createServerDnsNames).
+			Info("Generating server certificate")
+		err := ezcert.CreateServerCertAndKey(*out, *subject, *expires, *keyBits, *createServerCaCert, *createServerUserPrefix, *createServerDnsNames)
+		if err != nil {
+			log.WithError(err).Error("Failed to generate Server certificate")
 			os.Exit(1)
 		}
 	}
