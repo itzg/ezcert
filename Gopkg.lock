@@ -10,7 +10,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/alecthomas/template"
-  packages = [".","parse"]
+  packages = [
+    ".",
+    "parse"
+  ]
   revision = "a0175ee3bccc567396460bf5acd36800cb10c49c"
 
 [[projects]]
@@ -25,9 +28,36 @@
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
 
+[[projects]]
+  branch = "master"
+  name = "github.com/shibukawa/configdir"
+  packages = ["."]
+  revision = "e180dbdc8da04c4fa04272e875ce64949f38bd3e"
+
+[[projects]]
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
+  version = "v1.0.4"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = [
+    "unix",
+    "windows"
+  ]
+  revision = "810d7000345868fc619eb81f46307107118f4ae1"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3286a6278cbe85b6ef8adbcb799fab6813b1df64e967e72e2adaa5e05839f795"
+  inputs-digest = "512066e6a00ce90348c60ae07f0e91ae7b8a799c55128a94487768b43f45a348"
   solver-name = "gps-cdcl"
   solver-version = 1

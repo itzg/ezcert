@@ -24,6 +24,15 @@
 [[constraint]]
   name = "github.com/alecthomas/kingpin"
   version = "2.2.6"
+
 [[constraint]]
   name = "github.com/pkg/errors"
   version = "0.8.0"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = "1.0.4"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/shibukawa/configdir"

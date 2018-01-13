@@ -19,35 +19,53 @@ package main
 import (
 	"github.com/alecthomas/kingpin"
 	"github.com/itzg/ezcert"
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"os"
+	"time"
 )
 
 var Version string = "DEV"
 
 var (
-	createCa        = kingpin.Command("ca", "Create a CA certificate")
-	createCaSubject = ezcert.DN(createCa.Flag("subject", "A distinguished name (DN) of the CA, " +
+	subject = ezcert.DN(kingpin.Flag("subject", "A distinguished name (DN) of the certificate's subject, "+
 		"such as CN=widgets.com;C=US;L=Dallas;ST=Texas;O=Internet Widgets;OU=WWW").
 		Required())
-	createCaExpires = createCa.Flag("expires", "Specifies the number of days to make a certificate valid for").
+	expires = kingpin.Flag("expires", "Specifies the number of days to make a certificate valid for").
 		Default("30").Int()
-	createCaKeyBits = createCa.Flag("key-bits", "Bit length of the private key to generate").
+	keyBits = kingpin.Flag("key-bits", "Bit length of the private key to generate").
 		Default("2048").Int()
-	createCaOut = createCa.Flag("out", "Existing directory the CA files will be written").Default("certs").
+	out = kingpin.Flag("out", "Existing directory the CA files will be written").Default("certs").
 		ExistingDir()
-)
+	logColor = kingpin.Flag("log-color", "Force color log format").Action(func(context *kingpin.ParseContext) error {
+		log.SetFormatter(&log.TextFormatter{ForceColors: true, TimestampFormat: time.RFC822, FullTimestamp: true})
+		return nil
+	}).Bool()
 
+	createCa = kingpin.Command("ca", "Create a CA certificate")
+
+	createClient       = kingpin.Command("client", "Create a client certificate from a CA certificate")
+	createClientCaCert = createClient.Flag("ca-cert", "An existing CA certificate").
+				Required().ExistingFile()
+	createClientUserPrefix = createClient.Flag("prefix", "A prefix to use for the generated files").String()
+)
 
 func main() {
 	kingpin.Version(Version)
 
 	switch kingpin.Parse() {
 	case createCa.FullCommand():
-		fmt.Println("Running ca command")
-		err := ezcert.CreateCaCertAndKey(*createCaOut, *createCaSubject, *createCaExpires, *createCaKeyBits)
+		log.Info("Generating CA certificate")
+		err := ezcert.CreateCaCertAndKey(*out, *subject, *expires, *keyBits)
 		if err != nil {
-			fmt.Println("ERROR:", err)
+			log.WithError(err).Error("Failed to generate CA certificate")
+			os.Exit(1)
+		}
+
+	case createClient.FullCommand():
+		log.WithField("subject", *subject).Info("Generating client certificate")
+		err := ezcert.CreateClientCertAndKey(*out, *subject, *expires, *keyBits, *createClientCaCert, *createClientUserPrefix)
+		if err != nil {
+			log.WithError(err).Error("Failed to generate client certificate")
 			os.Exit(1)
 		}
 	}

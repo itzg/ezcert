@@ -17,32 +17,38 @@
 package ezcert
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/shibukawa/configdir"
+	log "github.com/sirupsen/logrus"
 	"io"
+	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
-	"encoding/asn1"
-	"math/big"
-	"crypto/sha1"
-	"crypto"
 )
 
 const (
-	FileTypeCert   = "cert"
-	FileTypeBundle = "bundle"
-	FileTypeRsaKey = "rsa-key"
+	FileTypeCert     = "cert"
+	FileTypeBundle   = "bundle"
+	FileTypeRsaKey   = "rsa-key"
 	FileTypePkcs8Key = "pkcs8-key"
 
 	PemBlockTypeCertificate     = "CERTIFICATE"
 	PemBlockTypeRsaPrivateKey   = "RSA PRIVATE KEY"
 	PemBlockTypePkcs8PrivateKey = "PRIVATE KEY"
+
+	DataFilename = "ezcert-data.json"
 )
 
 type Pkcs8Key struct {
@@ -51,34 +57,139 @@ type Pkcs8Key struct {
 	PrivateKey          []byte
 }
 
+type Data struct {
+	SerialNumber int64
+}
+
+func AllocateSerialNumber() (*big.Int, error) {
+	var data Data
+
+	configDirs := configdir.New("me.itzg", "ezcert")
+	configDirs.LocalPath, _ = filepath.Abs(".")
+
+	folder := configDirs.QueryFolderContainsFile(DataFilename)
+	if folder != nil {
+		bytes, err := folder.ReadFile(DataFilename)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Unable to read %s", DataFilename)
+		}
+		err = json.Unmarshal(bytes, &data)
+		if err != nil {
+			return nil, errors.Wrap(err, "Unable to unmarshal ezcert data")
+		}
+	}
+
+	data.SerialNumber++
+
+	bytes, err := json.Marshal(&data)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to marshal ezcert data")
+	}
+	if folder == nil {
+		folder = configDirs.QueryFolders(configdir.Global)[0]
+	}
+
+	err = folder.WriteFile(DataFilename, bytes)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Unable to write %s", DataFilename)
+	}
+
+	return big.NewInt(data.SerialNumber), nil
+}
+
 func CreateCaCertAndKey(out string, subject pkix.Name, expires int, keyBits int) error {
 
-	privateKey, err := rsa.GenerateKey(rand.Reader, keyBits)
+	privateKey, templateCert, err := newKeyAndTemplate(subject, expires, keyBits)
 	if err != nil {
-		return errors.Wrap(err, "Failed to generate RSA private key")
+		return err
 	}
-
-	subjectKeyId, err := generateSubjectKeyId(privateKey.Public())
-	if err != nil {
-		return errors.Wrap(err, "Unable to generate subject key identifier")
-	}
-
-	var templateCert x509.Certificate
-	templateCert.Subject = subject
-	templateCert.SerialNumber = big.NewInt(1)
 	templateCert.IsCA = true
-	templateCert.SubjectKeyId = subjectKeyId
 	templateCert.BasicConstraintsValid = true
-	templateCert.NotBefore = time.Now()
-	templateCert.NotAfter = time.Now().AddDate(0, 0, expires)
 	templateCert.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
 
-	certDer, err := x509.CreateCertificate(rand.Reader, &templateCert, &templateCert, privateKey.Public(), privateKey)
+	certDer, err := x509.CreateCertificate(rand.Reader, templateCert, templateCert, privateKey.Public(), privateKey)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create self-signed CA certificate")
 	}
 
 	return WriteCertKeyFiles(out, "ca", "RSA", certDer, privateKey)
+}
+
+func newKeyAndTemplate(subject pkix.Name, expires int, keyBits int) (*rsa.PrivateKey, *x509.Certificate, error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, keyBits)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed to generate RSA private key")
+	}
+
+	subjectKeyId, err := generateSubjectKeyId(privateKey.Public())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Unable to generate subject key identifier")
+	}
+
+	var templateCert x509.Certificate
+	templateCert.Subject = subject
+	templateCert.SerialNumber, err = AllocateSerialNumber()
+	if err != nil {
+		log.WithError(err).Warn("Failed to allocate serial number, using fixed value")
+		templateCert.SerialNumber = big.NewInt(1)
+	}
+	templateCert.SubjectKeyId = subjectKeyId
+	templateCert.NotBefore = time.Now()
+	templateCert.NotAfter = time.Now().AddDate(0, 0, expires)
+
+	return privateKey, &templateCert, nil
+}
+
+func CreateClientCertAndKey(out string, subject pkix.Name, expires int, keyBits int, caCertPath string, userPrefix string) error {
+
+	signerCert, err := readCertFromPemFile(caCertPath)
+	if err != nil {
+		return err
+	}
+
+	privateKey, templateCert, err := newKeyAndTemplate(subject, expires, keyBits)
+	if err != nil {
+		return err
+	}
+
+	templateCert.IsCA = false
+	templateCert.BasicConstraintsValid = true
+	templateCert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+
+	certDer, err := x509.CreateCertificate(rand.Reader, templateCert, signerCert, privateKey.Public(), privateKey)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create self-signed CA certificate")
+	}
+
+	var fullPrefix string
+	if userPrefix != "" {
+		fullPrefix = userPrefix + "-client"
+	} else {
+		fullPrefix = "client"
+	}
+	return WriteCertKeyFiles(out, fullPrefix, "RSA", certDer, privateKey)
+}
+
+func readCertFromPemFile(certPath string) (*x509.Certificate, error) {
+	caCertBytes, err := ioutil.ReadFile(certPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Unable to read %s", certPath)
+	}
+
+	remainder := caCertBytes
+	for len(remainder) > 0 {
+		var caCertBlock *pem.Block
+		caCertBlock, remainder = pem.Decode(caCertBytes)
+		if caCertBlock != nil && caCertBlock.Type == PemBlockTypeCertificate {
+			certificate, err := x509.ParseCertificate(caCertBlock.Bytes)
+			if err != nil {
+				return nil, errors.Wrapf(err, "Unable to parse certificate from %s", certPath)
+			}
+			return certificate, nil
+		}
+	}
+
+	return nil, errors.Errorf("The file %s did not contain a certificate block", certPath)
 }
 
 func WriteCertKeyFiles(out string, prefix string, keyAlgorithm string, certDer []byte, privateKey *rsa.PrivateKey) error {
@@ -126,24 +237,29 @@ func WriteCertKeyFiles(out string, prefix string, keyAlgorithm string, certDer [
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write certificate file")
 	}
-	err = EncodePem(bundleFile, PemBlockTypeCertificate, certDer)
-	if err != nil {
-		return errors.Wrap(err, "Unable to encode/write bundle file")
-	}
+	log.Infof("Wrote %s", certPath)
 
 	err = EncodePem(rsaKeyFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write private RSA key file")
 	}
+	log.Infof("Wrote %s", rsaKeyPath)
+
+	err = EncodePem(bundleFile, PemBlockTypeCertificate, certDer)
+	if err != nil {
+		return errors.Wrap(err, "Unable to encode/write bundle file")
+	}
 	err = EncodePem(bundleFile, PemBlockTypeRsaPrivateKey, privateKeyDer)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write bundle file")
 	}
+	log.Infof("Wrote %s", bundlePath)
 
 	err = EncodePem(pkcs8KeyFile, PemBlockTypePkcs8PrivateKey, privateKeyPkcs8Der)
 	if err != nil {
 		return errors.Wrap(err, "Unable to encode/write private PKCS8/RSA key file")
 	}
+	log.Infof("Wrote %s", pkcs8KeyPath)
 
 	return nil
 }
@@ -168,7 +284,7 @@ func MarshalPKCS8PrivateKey(privateKey *rsa.PrivateKey) ([]byte, error) {
 
 	pkcsKey := Pkcs8Key{
 		PrivateKeyAlgorithm: make([]asn1.ObjectIdentifier, 1),
-		PrivateKey: x509.MarshalPKCS1PrivateKey(privateKey),
+		PrivateKey:          x509.MarshalPKCS1PrivateKey(privateKey),
 	}
 
 	// pkcs-1.rsaEncryption
