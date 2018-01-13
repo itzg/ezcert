@@ -34,7 +34,8 @@ var (
 		Default("30").Int()
 	keyBits = kingpin.Flag("key-bits", "Bit length of the private key to generate").
 		Default("2048").Int()
-	out = kingpin.Flag("out", "Existing directory the CA files will be written").Default("certs").
+	out = kingpin.Flag("out", "Existing directory where the certificate and key files will be written").
+		Default("certs").
 		ExistingDir()
 	logColor = kingpin.Flag("log-color", "Force color log format").Action(func(context *kingpin.ParseContext) error {
 		log.SetFormatter(&log.TextFormatter{ForceColors: true, TimestampFormat: time.RFC822, FullTimestamp: true})
