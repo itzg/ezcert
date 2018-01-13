@@ -17,3 +17,4 @@ jobs:
 
       - store_artifacts:
           path: dist
+          destination: dist
