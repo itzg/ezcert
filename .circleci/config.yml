@@ -25,3 +25,25 @@ jobs:
             if [[ -v GITHUB_TOKEN && -v CIRCLE_TAG ]]; then
               make release
             fi
+
+  release:
+    docker:
+      - image: circleci/golang:1.9
+
+    working_directory: /go/src/github.com/itzg/ezcert
+    steps:
+      - checkout
+
+      - run: make release
+
+workflows:
+  version: 2
+  build-workflow:
+    jobs:
+      - build:
+      - release:
+          filters:
+            tags:
+              only: /\d+\.\d+\.\d+/
+            branches:
+              exclude: /.*/
