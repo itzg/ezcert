@@ -18,3 +18,10 @@ jobs:
       - store_artifacts:
           path: dist
           destination: dist
+
+      - run:
+          name: gorelease, if tag
+          command: |
+            if [[ -v GITHUB_TOKEN && -v CIRCLE_TAG ]]; then
+              make release
+            fi
