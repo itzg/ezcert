@@ -49,4 +49,4 @@ workflows:
             tags:
               only: /\d+\.\d+\.\d+/
             branches:
-              ingore: /.*/
+              ignore: /.*/
