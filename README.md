@@ -1,3 +1,6 @@
+[![CircleCI](https://img.shields.io/circleci/project/github/itzg/ezcert.svg)](https://circleci.com/gh/itzg/ezcert)
+[![GitHub release](https://img.shields.io/github/release/itzg/ezcert.svg)](https://github.com/itzg/ezcert/releases/latest)
+
 # ezcert user guide
 
 `ezcert` is a tool that focuses on doing one thing, which is generating certificates and keys to enable a
