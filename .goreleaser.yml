@@ -20,6 +20,7 @@ archive:
     - docs/*
 
 changelog:
-  exclude:
-    - '^ci:'
-    - '^typo:'
+  filters:
+    exclude:
+      - '^ci:'
+      - '^typo:'
