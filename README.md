@@ -1,3 +1,7 @@
+# WORK IN PROGRESS
+
+This project still has some bugs and I recommend using [cfssl](https://github.com/cloudflare/cfssl) for now.
+
 [![CircleCI](https://img.shields.io/circleci/project/github/itzg/ezcert.svg)](https://circleci.com/gh/itzg/ezcert)
 [![GitHub release](https://img.shields.io/github/release/itzg/ezcert.svg)](https://github.com/itzg/ezcert/releases/latest)
 
